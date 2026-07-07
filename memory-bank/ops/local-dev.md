@@ -1,7 +1,7 @@
 ---
 status: draft
-version: "1.0"
-updated: 2026-07-05
+version: "1.1"
+updated: 2026-07-07
 verified_commit: ""
 owner: ""
 ---
@@ -24,6 +24,20 @@ TODO(template): перечислить инструменты с точными 
 
 Пример (замените своим): .NET SDK 8.0.x (`winget install Microsoft.DotNet.SDK.8`),
 Docker Desktop ≥ 4.30, доступ к GitHub-организации.
+
+## Первичная настройка (однократно на клон)
+
+Сразу после клона включи предохранители репозитория одной командой:
+
+```bash
+python scripts/setup.py
+```
+
+Она включает git pre-commit-хук (`core.hooksPath`), который автоматически поднимает
+`version`/`updated` документов базы при коммите — вручную помнить о версионировании не
+нужно. Проверить состояние: `python scripts/setup.py --check`. Механизм версий —
+[../_meta/frontmatter.md](../_meta/frontmatter.md). Хук — только локальное удобство;
+непробиваемый рубеж всё равно даёт проверка в CI.
 
 ## Шаги запуска с нуля
 

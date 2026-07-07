@@ -20,6 +20,7 @@ import check_session_close as scc  # noqa: E402
 import kb_log_read  # noqa: E402
 import mb_lib  # noqa: E402
 import mb_log  # noqa: E402
+import setup as setup_tool  # noqa: E402
 
 TODAY = date(2026, 7, 5)
 
@@ -408,6 +409,37 @@ class KbLogReadTests(unittest.TestCase):
             kb_log_read.append_line(log, f"{i}\t{big}")
         lines = log.read_text(encoding="utf-8").splitlines()
         self.assertLessEqual(len(lines), kb_log_read.ROTATE_KEEP_LINES)
+
+
+@unittest.skipUnless(shutil.which("git"), "git недоступен")
+class SetupTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True, capture_output=True)
+        hook = self.root / "scripts" / "git-hooks" / "pre-commit"
+        hook.parent.mkdir(parents=True)
+        hook.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    def _hooks_path(self):
+        r = subprocess.run(["git", "config", "--local", "core.hooksPath"],
+                           cwd=self.root, capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else None
+
+    def test_check_before_enable_fails(self):
+        self.assertEqual(setup_tool.main(["--check", "--root", str(self.root)]), 1)
+
+    def test_enable_is_idempotent(self):
+        self.assertEqual(setup_tool.main(["--root", str(self.root)]), 0)
+        self.assertEqual(self._hooks_path(), "scripts/git-hooks")
+        self.assertEqual(setup_tool.main(["--root", str(self.root)]), 0)  # повторно безопасно
+        self.assertEqual(self._hooks_path(), "scripts/git-hooks")
+        self.assertEqual(setup_tool.main(["--check", "--root", str(self.root)]), 0)  # теперь проходит
+
+    def test_missing_hook_file_is_error(self):
+        (self.root / "scripts" / "git-hooks" / "pre-commit").unlink()
+        self.assertEqual(setup_tool.main(["--root", str(self.root)]), 2)
 
 
 if __name__ == "__main__":

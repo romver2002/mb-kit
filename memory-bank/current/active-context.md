@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.2"
+version: "1.3"
 updated: 2026-07-07
 verified_commit: ""
 owner: ""
@@ -32,6 +32,7 @@ owner: ""
 - TODO(template): актуальные договорённости команды.
 - 2026-07-07 — Версионирование: bump_frontmatter теперь ловит откат version назад (чинит от базовой), get_scalar не теряет мажор на комментированной версии; frontmatter.md синхронизирован с поведением (bump на любую правку тела; это не semver)
 - 2026-07-07 — Навигация для агентов: раздел «Как искать» в README, grep-first в AGENTS.md, пример path-scoped правил для авто-подсказки нужных документов
+- 2026-07-07 — Добавлен scripts/setup.py — разовый бутстрап: включает pre-commit-хук (core.hooksPath) одной командой, --check для самопроверки; прописан в local-dev.md/frontmatter.md/хуке
 
 ## Следующие шаги
 

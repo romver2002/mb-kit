@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.1"
+version: "1.2"
 updated: 2026-07-07
 verified_commit: ""
 owner: "teamlead"
@@ -44,9 +44,8 @@ owner: ""                 # ответственная роль/человек (
   это чинится/блокируется как непроставленный bump (см. ниже), а починка поднимает
   минор от **базовой** версии, а не от ошибочно пониженной.
 - Проставляет автоматика — `scripts/bump_frontmatter.py`: в git pre-commit (включение
-  однократно на клоне: `git config core.hooksPath scripts/git-hooks`) и рубеж в CI,
-  который не пропустит правку тела без корректного bump. Вручную version/updated
-  поднимать не нужно.
+  однократно на клоне: `python scripts/setup.py`) и рубеж в CI, который не пропустит
+  правку тела без корректного bump. Вручную version/updated поднимать не нужно.
 - Исключение — `current/`: их frontmatter ведёт `scripts/mb_log.py` (он сам
   поднимает version/updated при записи), поэтому CI-рубеж их не форсит.
   Если pre-commit не включён, недостающий bump поймает CI на PR.
