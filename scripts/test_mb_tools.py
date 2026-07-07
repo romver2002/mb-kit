@@ -50,6 +50,24 @@ class MbLibTests(unittest.TestCase):
         self.assertEqual(mb_lib.bump_minor(None), "1.0")
         self.assertEqual(mb_lib.bump_minor("кривая"), "1.0")
 
+    def test_parse_and_compare_version(self):
+        self.assertEqual(mb_lib.parse_version("3.7"), (3, 7))
+        self.assertEqual(mb_lib.parse_version("1.10"), (1, 10))
+        self.assertIsNone(mb_lib.parse_version("кривая"))
+        self.assertTrue(mb_lib.version_increased("1.0", "1.1"))
+        self.assertTrue(mb_lib.version_increased("1.9", "1.10"))  # числовое, не строковое
+        self.assertTrue(mb_lib.version_increased("1.5", "2.0"))
+        self.assertFalse(mb_lib.version_increased("1.0", "1.0"))
+        self.assertFalse(mb_lib.version_increased("2.4", "1.0"))  # откат назад — не рост
+        self.assertFalse(mb_lib.version_increased("1.10", "1.9"))
+
+    def test_get_scalar_strips_trailing_comment(self):
+        # версия с хвостовым YAML-комментарием (как в примерах схемы) читается как «3.7»,
+        # а не как весь остаток строки — иначе bump_minor терял бы мажор и сбрасывал в «1.0»
+        fm = '---\nstatus: active\nversion: "3.7"  # мажор.минор\nupdated: 2026-06-01\n---\n'
+        self.assertEqual(mb_lib.get_scalar(fm, "version"), "3.7")
+        self.assertEqual(mb_lib.bump_minor(mb_lib.get_scalar(fm, "version")), "3.8")
+
     def test_touch(self):
         touched = mb_lib.touch(DOC_V1, TODAY)
         fm, body = mb_lib.split_document(touched)
@@ -105,6 +123,23 @@ class BumpLogicTests(unittest.TestCase):
         self.assertEqual(mb_lib.get_scalar(fm, "version"), "1.1")
         self.assertEqual(mb_lib.get_scalar(fm, "updated"), "2026-07-05")
 
+    def test_manual_major_bump_not_flagged(self):
+        # рост версии (ручной мажор) не считается непроставленным
+        self.assertNotIn("version", bump.stale_fields(DOC_V1, self._edited('"2.0"', "2026-07-05")))
+
+    def test_version_regression_is_flagged(self):
+        # база «2.4», автор при правке тела уронил версию до «1.0» — это должно ловиться
+        base = DOC_V1.replace('"1.0"', '"2.4"')
+        lowered = self._edited('"1.0"', "2026-07-05")
+        self.assertIn("version", bump.stale_fields(base, lowered))
+
+    def test_fix_text_bumps_from_base_not_backward(self):
+        # чиним от базовой версии «2.4», а не от ошибочно пониженной «1.0» → «2.5», не «1.1»
+        lowered = self._edited('"1.0"')
+        fixed = bump.fix_text(lowered, ["version", "updated"], TODAY, base_version="2.4")
+        fm, _ = mb_lib.split_document(fixed)
+        self.assertEqual(mb_lib.get_scalar(fm, "version"), "2.5")
+
 
 @unittest.skipUnless(shutil.which("git"), "git недоступен")
 class BumpGitIntegrationTests(unittest.TestCase):
@@ -122,8 +157,8 @@ class BumpGitIntegrationTests(unittest.TestCase):
         self._git("commit", "-q", "-m", "v1")
 
     def _git(self, *args):
-        subprocess.run(["git", *args], cwd=self.root, check=True,
-                       capture_output=True, text=True)
+        return subprocess.run(["git", *args], cwd=self.root, check=True,
+                              capture_output=True, text=True, encoding="utf-8")
 
     def test_check_then_fix_against_base(self):
         self.doc.write_text(DOC_V1.replace("старое тело", "новое тело"), encoding="utf-8")
@@ -136,6 +171,18 @@ class BumpGitIntegrationTests(unittest.TestCase):
         self.assertEqual(mb_lib.get_scalar(fm, "updated"), date.today().isoformat())
         # идемпотентность: повторный check уже чист
         self.assertEqual(bump.main(["--base", "HEAD~1", "--check", "--root", str(self.root)]), 0)
+
+    def test_version_regression_caught_and_repaired(self):
+        # правка тела с ПОНИЖЕНИЕМ версии ловится --check и чинится от базовой версии
+        self.doc.write_text(
+            DOC_V1.replace("старое тело", "новое тело").replace('"1.0"', '"0.5"'),
+            encoding="utf-8")
+        self._git("add", ".")
+        self._git("commit", "-q", "-m", "edit + lowered version")
+        self.assertEqual(bump.main(["--base", "HEAD~1", "--check", "--root", str(self.root)]), 1)
+        self.assertEqual(bump.main(["--base", "HEAD~1", "--root", str(self.root)]), 0)
+        fm, _ = mb_lib.split_document(self.doc.read_text(encoding="utf-8"))
+        self.assertEqual(mb_lib.get_scalar(fm, "version"), "1.1")  # от базовой 1.0, не от 0.5
 
     def test_precommit_mode_fixes_staged(self):
         self.doc.write_text(DOC_V1.replace("старое тело", "новое тело"), encoding="utf-8")
@@ -168,6 +215,7 @@ class BumpGitIntegrationTests(unittest.TestCase):
 
     def test_rename_with_edit_is_flagged(self):
         # переименование + правка тела без bump должно ловиться --check
+        base_branch = self._git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
         self._git("checkout", "-q", "-b", "feature")
         old = self.root / "memory-bank" / "doc.md"
         new = self.root / "memory-bank" / "renamed.md"
@@ -176,7 +224,7 @@ class BumpGitIntegrationTests(unittest.TestCase):
         self._git("add", "-A")
         self._git("commit", "-q", "-m", "rename+edit no bump")
         self.assertEqual(
-            bump.main(["--base", "master", "--check", "--root", str(self.root)]), 1)
+            bump.main(["--base", base_branch, "--check", "--root", str(self.root)]), 1)
 
     def test_diverged_branch_uses_merge_base(self):
         # main ушёл вперёд с бампом; feature от точки ветвления правит тело без бампа —

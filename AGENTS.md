@@ -20,7 +20,9 @@
 2. Открой файл процесса под тип задачи из [memory-bank/workflows/](memory-bank/workflows/)
    (новая фича / баг / рефакторинг / hotfix) и следуй ему.
 3. Дальше открывай только те документы базы, которые относятся к задаче, —
-   индекс подскажет какие. Не загружай базу целиком без необходимости.
+   индекс подскажет какие. Не читай базу подряд: маршрут по задаче + `grep` по
+   термину, для широкого обзора — субагент (детали: раздел «Как искать» в
+   [memory-bank/README.md](memory-bank/README.md)).
 4. **В конце значимой сессии** обнови
    [current/active-context.md](memory-bank/current/active-context.md) и
    [current/progress.md](memory-bank/current/progress.md).

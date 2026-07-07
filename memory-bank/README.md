@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-05
+version: "1.1"
+updated: 2026-07-07
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -21,6 +21,22 @@ owner: "teamlead"
 | Hotfix / инцидент | [workflows/hotfix.md](workflows/hotfix.md), [ops/runbooks/README.md](ops/runbooks/README.md) | ops/environments.md, ops/observability.md |
 | Вопрос «почему так устроено» | [decisions/README.md](decisions/README.md) | architecture/overview.md |
 | Работа с самой базой | [_meta/lifecycle.md](_meta/lifecycle.md) | _meta/governance.md, _meta/frontmatter.md |
+
+## Как искать в базе (не читать подряд)
+
+База небольшая, но читать её целиком не нужно — это теряет контекст. Порядок:
+
+1. **Маршрут по задаче** — таблица выше: 1–2 обязательных файла, остальное по мере надобности.
+2. **Точечный поиск** — `grep`/поиск по термину прямо по `memory-bank/` и по этому индексу,
+   а не последовательное открытие файлов. Названия и описания разделов ниже — якоря для поиска.
+3. **Широкий обзор** — если нужно свести факты из многих документов, запусти
+   субагента-исследователя (в Claude Code — Explore/general-purpose): он прочешет базу
+   и вернёт выжимку, не засоряя основной контекст.
+4. **Свежесть под рукой** — `updated`/`verified_commit` во frontmatter показывают, насколько
+   документу можно верить, не открывая историю git.
+
+Для авто-подсказки нужных документов по тому, что правишь: Claude Code — path-scoped правила
+в `.claude/rules/*.md` (frontmatter `paths:`); Codex — вложенные `AGENTS.md` по каталогам кода.
 
 ## Карта разделов
 

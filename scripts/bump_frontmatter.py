@@ -2,8 +2,9 @@
 """Авто-bump `version`/`updated` для изменённых документов memory-bank.
 
 Снимает с людей и агентов механику версионирования: если ТЕЛО документа
-изменилось относительно базовой ревизии, а `version`/`updated` — нет,
-скрипт поднимает их сам. Идемпотентен: уже поднятые поля не трогает.
+изменилось относительно базовой ревизии, а `version`/`updated` не поднялись
+(или version уехала назад), скрипт чинит их сам, поднимая version от базовой.
+Идемпотентен: уже поднятые (выросшие) поля не трогает.
 
 Режимы:
   pre-commit (по умолчанию)  застейдженные файлы против HEAD; починенные
@@ -26,7 +27,9 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mb_lib import bump_minor, get_scalar, normalize_newlines, set_scalar, split_document  # noqa: E402
+from mb_lib import (  # noqa: E402
+    bump_minor, get_scalar, normalize_newlines, set_scalar, split_document, version_increased,
+)
 
 
 def run_git(args: list[str], cwd: Path) -> str | None:
@@ -96,6 +99,9 @@ def changed_bank_files(cwd: Path, base: str | None) -> list[tuple[str | None, st
 def stale_fields(old_text: str, new_text: str) -> list[str]:
     """Какие поля не подняты при изменившемся теле: [], ['version'], ['updated'], оба.
 
+    `version` считается непроставленным, если новая версия НЕ выросла относительно
+    базовой (равна или, по ошибке, понижена) — так ловится и забытый bump, и откат
+    номера назад. Ручной мажорный/минорный подъём (new > old) уважается.
     Пустой список — bump не нужен (тело не менялось, поля уже подняты
     или документ вне схемы — им займётся валидатор).
     """
@@ -104,19 +110,25 @@ def stale_fields(old_text: str, new_text: str) -> list[str]:
     if new_fm is None or old_fm is None or old_body == new_body:
         return []
     stale = []
-    if get_scalar(new_fm, "version") == get_scalar(old_fm, "version"):
+    if not version_increased(get_scalar(old_fm, "version"), get_scalar(new_fm, "version")):
         stale.append("version")
     if get_scalar(new_fm, "updated") == get_scalar(old_fm, "updated"):
         stale.append("updated")
     return stale
 
 
-def fix_text(text: str, fields: list[str], today: date) -> str:
-    """Поднимает только непроставленные поля (уважает ручной bump другого поля)."""
+def fix_text(text: str, fields: list[str], today: date, base_version: str | None = None) -> str:
+    """Поднимает только непроставленные поля (уважает ручной bump другого поля).
+
+    `base_version` — версия в базовой ревизии; version поднимается от неё, а не от
+    текущего (возможно, ошибочно пониженного) значения, чтобы номер не пополз назад.
+    Без base_version бампится от текущего значения (совместимость со старыми вызовами).
+    """
     fm_block, body = split_document(text)
     assert fm_block is not None  # гарантировано stale_fields
     if "version" in fields:
-        fm_block = set_scalar(fm_block, "version", f'"{bump_minor(get_scalar(fm_block, "version"))}"')
+        base = base_version if base_version is not None else get_scalar(fm_block, "version")
+        fm_block = set_scalar(fm_block, "version", f'"{bump_minor(base)}"')
     if "updated" in fields:
         fm_block = set_scalar(fm_block, "updated", today.isoformat())
     return fm_block + body
@@ -184,14 +196,16 @@ def main(argv: list[str] | None = None) -> int:
                 violations.append(new_rel)
             continue
 
-        save(root / new_rel, fix_text(load(root / new_rel), fields, date.today()))
+        base_fm, _ = split_document(old_text)
+        base_version = get_scalar(base_fm, "version")  # бампим от базовой версии, не назад
+        save(root / new_rel, fix_text(load(root / new_rel), fields, date.today(), base_version))
         if args.base is None:
             run_git(["add", new_rel], root)
         print(f"bump_frontmatter: {new_rel} → {', '.join(fields)} обновлены")
 
     if violations:
         for rel in violations:
-            print(f"ОШИБКА {rel}: тело изменено, а version/updated — нет. "
+            print(f"ОШИБКА {rel}: тело изменено, а version не поднята (или понижена) / updated не обновлён. "
                   f"Локальная починка: python scripts/bump_frontmatter.py --base {args.base}")
         return 1
     return 0

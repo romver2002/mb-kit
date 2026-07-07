@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-05
+version: "1.1"
+updated: 2026-07-07
 verified_commit: ""
 owner: ""
 ---
@@ -58,6 +58,7 @@ owner: ""
 - Пример (замените своим): модуль отчётов ходит в БД мимо слоя портов —
   нарушает [../architecture/overview.md](../architecture/overview.md); план — #98.
 - TODO(template): крупные пункты долга со ссылками на issue.
+- 2026-07-07 — bump_frontmatter краевые случаи (задокументированы в docstring): rename+переписывание >50% и copy обходят проверку bump; при git add -p возможен двойной/сметающий bump
 
 ---
 
